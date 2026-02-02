@@ -49,31 +49,31 @@ go test ./...
     - нижнее получит WARN `shadowedByHost`, верх — WARN `overlyBroadRule`.
 
 ## Коды ошибок/предупреждений (Error codes reference)
-| Code | Уровень | Описание (RU) | Description (EN) |
-|------|---------|---------------|-------------------|
-| trustNetwork | ERROR | Сетевое правило с методом `trust` любой, кто дотянется до порта, зайдёт как суперпользователь без пароля. | Network rule with `trust`: anyone reaching the port can log in as any user without a password. |
-| passwordNoTLS | ERROR | `password` без TLS (ssl=on, но не `hostssl`): пароль уйдёт в открытом виде. | `password` without guaranteed TLS (ssl=on but not `hostssl`): password sent in cleartext. |
-| passwordNoSSL | ERROR | SSL выключен, метод `password` всегда шлёт пароль в открытую — небезопасно. | SSL is off; `password` always sends credentials in cleartext. |
-| passwordWithTLS | WARN | Даже в `hostssl` метод `password` передаёт пароль в открытом виде, лучше `scram/cert`. | Even over TLS, `password` sends cleartext; prefer `scram`/`cert`. |
-| md5Deprecated | WARN | `md5` устарел и будет удалён, переходите на `scram-sha-256`. | `md5` is deprecated; migrate to `scram-sha-256`. |
-| nonTLSPath | WARN | При `ssl=on` есть `host/hostnossl` для внешних адресов — можно подключиться без шифрования. | With ssl=on, `host/hostnossl` allows non-TLS connections from non-loopback addresses. |
-| hostsslNoSSL | ERROR | При `ssl=off` правила `hostssl` никогда не сработают. | When ssl=off, `hostssl` rules never match. |
-| wideAddress | WARN | Диапазон адресов шире порога (IPv4 ≤ /16, IPv6 ≤ /48 по умолчанию) — сократите сеть. | Address range wider than threshold (IPv4 ≤ /16, IPv6 ≤ /48) — narrow it down. |
-| allDbAllUser | WARN | `database=all` и `user=all`: нет сегментации БД и пользователей. | `database=all` and `user=all`: no access segmentation. |
-| replicationWideAccess | ERROR | Репликация разрешена из широкой сети или для всех пользователей — высокий риск компрометации. | Replication allowed from wide network or all users — high risk. |
-| identNoMap | WARN | Метод `ident` без `map=`: сопоставление не определено, возможны неожиданные логины. | `ident` without `map=`: mapping undefined, may allow unexpected logins. |
-| identMapMissing | ERROR | Указанный `map` отсутствует в `pg_ident.conf`, правило не сработает. | Referenced `map` is missing in `pg_ident.conf`; rule will not work. |
-| peerNonLocal | ERROR | Метод `peer` допустим только для `local`, в сетевых правилах ошибка. | `peer` allowed only for `local`; invalid in host rules. |
-| localAllAll | WARN | `local` с `trust/peer` и `all/all`: любой локальный пользователь зайдёт в любую БД. | `local` trust/peer with all/all: any local OS user can access any DB. |
-| clientcertNonHostssl | ERROR | Опция `clientcert` допустима только в `hostssl` — иначе синтаксическая ошибка. | `clientcert` is valid only in `hostssl` rules. |
-| clientcertInvalid | ERROR | `clientcert` должен быть `verify-ca` или `verify-full`, другие значения некорректны. | `clientcert` must be `verify-ca` or `verify-full`; other values invalid. |
-| shadowedByReject | ERROR | Правило ниже никогда не сработает из‑за верхнего `reject` — функциональная ошибка. | Lower rule never matches because of upper `reject` (logic error). |
-| shadowedByHost | WARN | Верхний `host` перехватывает и TLS, и non-TLS, затеняя `hostssl/hostnossl` ниже. | Upper `host` shadows lower `hostssl/hostnossl` rules. |
-| overlyBroadRule | WARN | Более широкое и более слабое правило выше перекрывает более строгое ниже. | Broader/weaker upper rule shadows a stricter lower rule. |
-| shadowedByBroadRule | WARN | Текущее правило затенено более широким/слабым выше и не достигнется. | Current rule is shadowed by a broader/weaker upper rule. |
-| redundantRule | INFO | Полный дубликат по условиям и методу — можно безопасно удалить. | Full duplicate (conditions+method); safe to remove. |
-| shadowedRule | WARN | Полностью перекрыто верхним правилом (условия совпадают, метод может отличаться). | Fully shadowed by an upper rule (conditions covered). |
-| partialOverlap | WARN | Частичное пересечение диапазонов/БД/пользователей — порядок правил может влиять. | Partial overlap of address/DB/user sets; order may affect behavior. |
+| Code | Уровень | Описание (RU) | Description (EN) | Пример строки/сценария |
+|------|---------|---------------|-------------------|-------------------------|
+| trustNetwork | ERROR | Сетевое правило с `trust`: любой, кто дотянется до порта, зайдёт как любой пользователь без пароля. | Network rule with `trust`: anyone reaching the port can log in as any user without a password. | `host all all 0.0.0.0/0 trust` |
+| passwordNoTLS | ERROR | `password` без гарантии TLS (ssl=on, но не `hostssl`): пароль уйдёт в clear. | `password` without guaranteed TLS (ssl=on but not `hostssl`): password sent in cleartext. | `host all all 10.0.0.0/16 password` (ssl=on) |
+| passwordNoSSL | ERROR | SSL выключен, метод `password` всегда шлёт пароль в открытую — критично. | SSL is off; `password` always sends credentials in cleartext. | `host all all 10.0.0.0/16 password` (ssl=off) |
+| passwordWithTLS | WARN | Даже в `hostssl` метод `password` передаёт пароль в clear, лучше `scram/cert`. | Even over TLS, `password` sends cleartext; prefer `scram`/`cert`. | `hostssl all all 10.0.0.0/16 password` |
+| md5Deprecated | WARN | `md5` устарел и будет удалён, переходите на `scram-sha-256`. | `md5` is deprecated; migrate to `scram-sha-256`. | `host all all 0.0.0.0/0 md5` |
+| nonTLSPath | WARN | При `ssl=on` есть `host/hostnossl` для внешних адресов — можно подключиться без шифрования. | With ssl=on, `host/hostnossl` allows non-TLS connections from non-loopback addresses. | `hostnossl all all 0.0.0.0/0 scram-sha-256` |
+| hostsslNoSSL | ERROR | При `ssl=off` правила `hostssl` никогда не сработают. | When ssl=off, `hostssl` rules never match. | `hostssl all all 10.0.0.0/16 scram-sha-256` (ssl=off) |
+| wideAddress | WARN | Диапазон адресов шире порога (IPv4 ≤ /16, IPv6 ≤ /48 по умолчанию) — сократите сеть. | Address range wider than threshold (IPv4 ≤ /16, IPv6 ≤ /48) — narrow it down. | `host all all 0.0.0.0/0 scram-sha-256` |
+| allDbAllUser | WARN | `database=all` и `user=all`: нет сегментации БД и пользователей. | `database=all` and `user=all`: no access segmentation. | `host all all 10.0.0.0/16 scram-sha-256` |
+| replicationWideAccess | ERROR | Репликация разрешена из широкой сети или для всех пользователей — высокий риск. | Replication allowed from wide network or all users — high risk. | `host replication all 0.0.0.0/0 scram-sha-256` |
+| identNoMap | WARN | Метод `ident` без `map=`: сопоставление не определено, возможны неожиданные логины. | `ident` without `map=`: mapping undefined, may allow unexpected logins. | `host all all 10.0.0.0/16 ident` |
+| identMapMissing | ERROR | Указанный `map` отсутствует в `pg_ident.conf`, правило не сработает. | Referenced `map` is missing in `pg_ident.conf`; rule will not work. | `host all all 10.0.0.0/16 ident map=missing` |
+| peerNonLocal | ERROR | Метод `peer` допустим только для `local`, в сетевых правилах ошибка. | `peer` allowed only for `local`; invalid in host rules. | `host all all 10.0.0.0/16 peer` |
+| localAllAll | WARN | `local` с `trust/peer` и `all/all`: любой локальный пользователь зайдёт в любую БД. | `local` trust/peer with all/all: any local OS user can access any DB. | `local all all trust` |
+| clientcertNonHostssl | ERROR | Опция `clientcert` допустима только в `hostssl` — иначе синтаксическая ошибка. | `clientcert` is valid only in `hostssl` rules. | `host all all 10.0.0.0/16 scram-sha-256 clientcert=verify-ca` |
+| clientcertInvalid | ERROR | `clientcert` должен быть `verify-ca` или `verify-full`, другие значения некорректны. | `clientcert` must be `verify-ca` or `verify-full`; other values invalid. | `hostssl all all 10.0.0.0/16 scram-sha-256 clientcert=bad` |
+| shadowedByReject | ERROR | Правило ниже никогда не сработает из‑за верхнего `reject` — функциональная ошибка. | Lower rule never matches because of upper `reject` (logic error). | R1: `host all all 10.0.0.0/16 reject` <br>R2: `host mydb app 10.0.0.5/32 scram` |
+| shadowedByHost | WARN | Верхний `host` перехватывает и TLS, и non-TLS, затеняя `hostssl/hostnossl` ниже. | Upper `host` shadows lower `hostssl/hostnossl` rules. | R1: `host all all 0.0.0.0/0 md5` <br>R2: `hostssl all all 0.0.0.0/0 scram` |
+| overlyBroadRule | WARN | Более широкое и более слабое правило выше перекрывает более строгое ниже. | Broader/weaker upper rule shadows a stricter lower rule. | R1: `host all all 0.0.0.0/0 md5` <br>R2: `host mydb app 10.0.0.5/32 scram` |
+| shadowedByBroadRule | WARN | Текущее правило затенено более широким/слабым выше и не достигнется. | Current rule is shadowed by a broader/weaker upper rule. | Отмечается для R2 из примера `overlyBroadRule`. |
+| redundantRule | INFO | Полный дубликат по условиям и методу — можно безопасно удалить. | Full duplicate (conditions+method); safe to remove. | R1: `host all all 10.0.0.0/24 scram` <br>R2: идентичная строка ниже |
+| shadowedRule | WARN | Полностью перекрыто верхним правилом (условия совпадают, метод может отличаться). | Fully shadowed by an upper rule (conditions covered). | R1: `host all all 10.0.0.0/16 scram` <br>R2: `host all all 10.0.0.5/32 md5` |
+| partialOverlap | WARN | Частичное пересечение диапазонов/БД/пользователей — порядок правил может влиять. | Partial overlap of address/DB/user sets; order may affect behavior. | R1: `host all all 10.0.0.0/16 scram` <br>R2: `host all all 10.0.1.0/24 md5` |
 
 ## Как читать вывод
 Формат строки: `SEVERITY CODE line=<num> <message>`
