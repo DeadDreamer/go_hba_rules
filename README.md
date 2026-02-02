@@ -1,14 +1,14 @@
 # go_hba_rules
 
-CLI‑утилита для подсветки проблем в `pg_hba.conf` (PostgreSQL) и базовой проверки перекрытий правил.
+CLI‑утилита для подсветки проблем в `pg_hba.conf` (PostgreSQL) и базовой проверки перекрытий правил (когда более широкое правило перекрывает более узкое).
 
 ## Что делает
-- Проверяет «простые» правила безопасности и корректности из спецификации в `readme.txt`:
+- Проверяет «простые» правила безопасности:
   - небезопасные методы (`trust` в сети, `password` без TLS, `md5` как deprecated, `peer` вне `local`, `ident` без/с неверным map, `clientcert` не в hostssl или с плохим значением и т.д.);
   - слишком широкие сети (пороги IPv4 `/16`, IPv6 `/48` по умолчанию);
   - `database=all` + `user=all` слишком общий доступ;
   - репликация из широкой сети или для всех пользователей;
-  - наличие не-TLS пути при `ssl=on` (host/hostnossl);
+  - наличие не-TLS пути при `ssl=on` для всей СУБД (host/hostnossl);
   - неработающие `hostssl` при `ssl=off` (опционально, если выставить `-ssl=false`).
 - Анализирует перекрытия правил сверху вниз: широкое правило перекрывает узкое, ранний `reject`, `host` затеняет `hostssl/hostnossl`, дубликаты и частичные пересечения.
 - Выводит текстовые строки вида `SEVERITY CODE line=N message`, а при наличии `ERROR` возвращает exit code 1.
@@ -22,12 +22,11 @@ CLI‑утилита для подсветки проблем в `pg_hba.conf` (
 ## Быстрый старт
 ```bash
 # Запуск проверок на примере
-GOCACHE=/tmp/gocache go run ./cmd/hba-check -hba testdata/pg_hba.conf -ident testdata/pg_ident.conf
+go run ./cmd/hba-check -hba testdata/pg_hba.conf -ident testdata/pg_ident.conf
 
 # Запуск тестов
-GOCACHE=/tmp/gocache go test ./...
+go test ./...
 ```
-> Почему `GOCACHE=/tmp/gocache`? В окружении CI/песочницы домашний кеш может быть недоступен по правам. Если у вас всё ок, флаг не нужен.
 
 ## Флаги
 - `-hba <path>` — путь к `pg_hba.conf` (обязателен).
@@ -52,10 +51,10 @@ GOCACHE=/tmp/gocache go test ./...
 ## Коды ошибок/предупреждений (Error codes reference)
 | Code | Уровень | Описание (RU) | Description (EN) |
 |------|---------|---------------|-------------------|
-| trustNetwork | ERROR | Сетевое правило с метод `trust`: любой, кто дотянется до порта, зайдёт как любой пользователь без пароля. | Network rule with `trust`: anyone reaching the port can log in as any user without a password. |
-| passwordNoTLS | ERROR | `password` без гарантии TLS (ssl=on, но не `hostssl`): пароль уйдёт в открытом виде. | `password` without guaranteed TLS (ssl=on but not `hostssl`): password sent in cleartext. |
+| trustNetwork | ERROR | Сетевое правило с методом `trust` любой, кто дотянется до порта, зайдёт как суперпользователь без пароля. | Network rule with `trust`: anyone reaching the port can log in as any user without a password. |
+| passwordNoTLS | ERROR | `password` без TLS (ssl=on, но не `hostssl`): пароль уйдёт в открытом виде. | `password` without guaranteed TLS (ssl=on but not `hostssl`): password sent in cleartext. |
 | passwordNoSSL | ERROR | SSL выключен, метод `password` всегда шлёт пароль в открытую — небезопасно. | SSL is off; `password` always sends credentials in cleartext. |
-| passwordWithTLS | WARN | Даже в `hostssl` метод `password` передаёт пароль в clear, лучше `scram/cert`. | Even over TLS, `password` sends cleartext; prefer `scram`/`cert`. |
+| passwordWithTLS | WARN | Даже в `hostssl` метод `password` передаёт пароль в открытом виде, лучше `scram/cert`. | Even over TLS, `password` sends cleartext; prefer `scram`/`cert`. |
 | md5Deprecated | WARN | `md5` устарел и будет удалён, переходите на `scram-sha-256`. | `md5` is deprecated; migrate to `scram-sha-256`. |
 | nonTLSPath | WARN | При `ssl=on` есть `host/hostnossl` для внешних адресов — можно подключиться без шифрования. | With ssl=on, `host/hostnossl` allows non-TLS connections from non-loopback addresses. |
 | hostsslNoSSL | ERROR | При `ssl=off` правила `hostssl` никогда не сработают. | When ssl=off, `hostssl` rules never match. |
@@ -97,6 +96,3 @@ Exit codes:
 - Спец-значения `sameuser/samerole/samegroup` и т.п. обрабатываются как строки (без полнотой семантики покрытий).
 - Для `samenet` не вычисляем реальную сеть интерфейсов — считаем «широко».
 - Парсер не поддерживает `include`/`@file` и многострочные комментарии — только базовый формат.
-
-## Авторские заметки
-Комментарии в коде на русском поясняют ключевые решения: нормализация адресов, критерии «широкости», логика перекрытий и коды ошибок. Это упрощает поддержку и аудит безопасности.
